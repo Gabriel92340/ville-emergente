@@ -17,3 +17,21 @@ class Configuration:
     duree_travail_s: int = 8 * 3600
     duree_loisir_s: int = 3600
     probabilite_loisir: float = 0.3
+
+
+@dataclass(frozen=True)
+class ConfigurationCerveau:
+    modele: str = "qwen2.5:3b"
+    quota_agents: int = 5
+    periode_ticks: int = 6
+    delai_ticks: int = 6
+    taille_memoire: int = 12
+    lieux_connus: int = 3
+    etapes_max: int = 6
+    duree_max_minutes: int = 720
+    temperature: float = 0.7
+    nb_jetons_max: int = 300
+
+    def __post_init__(self):
+        if self.delai_ticks < 1:
+            raise ValueError("le délai de réflexion doit être d'au moins un tick")

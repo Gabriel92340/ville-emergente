@@ -7,6 +7,7 @@ from ville.moteur.agent import (
     TRAVAIL,
     Agent,
     Aller,
+    Cerveau,
     Decideur,
     Intention,
     Perception,
@@ -26,6 +27,7 @@ class Simulation:
         carte: Carte,
         journal,
         decideur: Decideur | None = None,
+        cerveau: Cerveau | None = None,
     ):
         self.configuration = configuration
         self.carte = carte
@@ -34,18 +36,23 @@ class Simulation:
         self.horloge = Horloge(configuration.duree_tick_s, configuration.heure_depart_s)
         self.agents = creer_population(configuration, carte, self.alea)
         self.decideur = decideur or DecideurRegles(configuration, carte.noeuds)
+        self.cerveau = cerveau
         self.nb_decisions = 0
-        self.journal.ecrire(
-            {
-                "type": "entete",
-                "graine": configuration.graine,
-                "configuration": asdict(configuration),
-                "empreinte_carte": carte.empreinte,
-                "python": platform.python_version(),
-            }
-        )
+        entete = {
+            "type": "entete",
+            "graine": configuration.graine,
+            "configuration": asdict(configuration),
+            "empreinte_carte": carte.empreinte,
+            "python": platform.python_version(),
+        }
+        if cerveau is not None:
+            entete["cerveau"] = cerveau.description()
+            cerveau.demarrer(self)
+        self.journal.ecrire(entete)
 
     def avancer(self) -> None:
+        if self.cerveau is not None:
+            self.cerveau.tour(self.horloge.tick)
         intentions = self._decider()
         for agent, intention in intentions:
             self._appliquer(agent, intention)
@@ -62,24 +69,34 @@ class Simulation:
 
     def _faire_decider(self, agent: Agent) -> Intention:
         nom_flux = f"agents/{agent.identifiant}/decision"
-        perception = self._percevoir(agent)
-        intention = self.decideur.decider(perception, self.alea.flux(nom_flux))
+        perception = self.percevoir(agent)
+        flux = self.alea.flux(nom_flux)
+        if self.cerveau is None:
+            intention, source = self.decideur.decider(perception, flux), None
+        else:
+            intention, source = self.cerveau.decider(perception, flux)
         self.nb_decisions += 1
-        self.journal.ecrire(
-            {
-                "type": "decision",
-                "tick": self.horloge.tick,
-                "agent": agent.identifiant,
-                "graine": self.configuration.graine,
-                "flux": nom_flux,
-                "contexte": asdict(perception),
-                "intention": intention_en_dict(intention),
-                "reponse_brute": None,
-            }
-        )
+        evenement = {
+            "type": "decision",
+            "tick": self.horloge.tick,
+            "agent": agent.identifiant,
+            "graine": self.configuration.graine,
+            "flux": nom_flux,
+            "contexte": asdict(perception),
+            "intention": intention_en_dict(intention),
+            "reponse_brute": None,
+        }
+        if source is not None:
+            evenement["source"] = source
+        self._consigner(evenement)
         return intention
 
-    def _percevoir(self, agent: Agent) -> Perception:
+    def _consigner(self, evenement: dict) -> None:
+        self.journal.ecrire(evenement)
+        if self.cerveau is not None:
+            self.cerveau.observer(evenement)
+
+    def percevoir(self, agent: Agent) -> Perception:
         return Perception(
             tick=self.horloge.tick,
             seconde_du_jour=self.horloge.seconde_du_jour,
@@ -104,7 +121,7 @@ class Simulation:
         if agent.est_en_trajet:
             distance = agent.vitesse_m_s * self.configuration.duree_tick_s
             if agent.avancer(distance, self.carte):
-                self.journal.ecrire(
+                self._consigner(
                     {
                         "type": "arrivee",
                         "tick": self.horloge.tick,
