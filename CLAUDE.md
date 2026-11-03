@@ -52,7 +52,10 @@ ville/
 
 ## Commandes (à mettre à jour au fil du projet)
 
-- Tests : pytest -q
+- Installer : python -m venv .venv, puis pip install -e ".[dev]" dans l'environnement
+- Tests : pytest -q (ajouter -m reseau pour le test de téléchargement réel, qui demande aussi l'extra carte)
+- Lancer la simulation : python -m ville.moteur --graine 42 --heures 24
+- Figer une carte : pip install -e ".[carte]", puis python -m ville.moteur.preparer_carte --latitude 45.7610 --longitude 4.8330 --rayon 1000 --sortie ville/cartes/lyon_presquile.json
 - Lancer le serveur : uvicorn ville.api.serveur:app --reload (à créer en phase 4 ou 5)
 
 ## Instructions de compactage
