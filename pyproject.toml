@@ -21,5 +21,8 @@ ville = ["cartes/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["ville/tests"]
-addopts = "-m 'not reseau'"
-markers = ["reseau: nécessite un accès au réseau"]
+addopts = "-m 'not reseau and not ollama'"
+markers = [
+    "reseau: nécessite un accès au réseau",
+    "ollama: nécessite un serveur Ollama local",
+]
