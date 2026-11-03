@@ -26,7 +26,7 @@ class Client(Protocol):
 
 
 class ClientOllama:
-    def __init__(self, url: str = "http://localhost:11434", delai_max_s: float = 120.0):
+    def __init__(self, url: str = "http://127.0.0.1:11434", delai_max_s: float = 120.0):
         self._url = url.rstrip("/")
         self._delai_max_s = delai_max_s
 

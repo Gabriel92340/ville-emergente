@@ -36,7 +36,7 @@ def analyser_arguments() -> argparse.Namespace:
     analyseur.add_argument("--periode", type=int, default=ConfigurationCerveau.periode_ticks)
     analyseur.add_argument("--delai", type=int, default=ConfigurationCerveau.delai_ticks)
     analyseur.add_argument("--ouvriers", type=int, default=1)
-    analyseur.add_argument("--url-ollama", default="http://localhost:11434")
+    analyseur.add_argument("--url-ollama", default="http://127.0.0.1:11434")
     analyseur.add_argument("--delai-max-appel", type=float, default=120.0)
     analyseur.add_argument("--rejeu", type=Path)
     analyseur.add_argument("--mesures", type=Path)
