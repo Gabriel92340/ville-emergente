@@ -110,6 +110,21 @@ def test_loisir_paye(carte_grille):
         )
 
 
+def test_la_routine_recommence_chaque_jour(carte_grille):
+    journal = JournalMemoire()
+    configuration = Configuration(probabilite_loisir=0.0)
+    salaire_journee = configuration.salaire_horaire_centimes * 8
+    simulation = simuler(carte_grille, heures=3 * 24, journal=journal, probabilite_loisir=0.0)
+    for agent in simulation.agents:
+        arrivees = [
+            evenement["etape"]
+            for evenement in journal.evenements
+            if evenement["type"] == "arrivee" and evenement["agent"] == agent.identifiant
+        ]
+        assert arrivees == ["arrivee_travail", "arrivee_domicile"] * 3
+        assert agent.budget_centimes == configuration.budget_initial_centimes + 3 * salaire_journee
+
+
 class DecideurEspion:
     def __init__(self):
         self.ticks_par_agent = {}
