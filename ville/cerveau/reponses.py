@@ -20,21 +20,32 @@ def schema_plan(lieux: dict[str, int], cerveau: ConfigurationCerveau) -> dict:
                 "minItems": 1,
                 "maxItems": cerveau.etapes_max,
                 "items": {
-                    "type": "object",
-                    "properties": {
-                        "lieu": {"type": "string", "enum": sorted(lieux)},
-                        "activite": {"type": "string", "enum": list(ACTIVITES)},
-                        "duree_minutes": {
-                            "type": "integer",
-                            "minimum": 1,
-                            "maximum": cerveau.duree_max_minutes,
-                        },
-                    },
-                    "required": ["lieu", "activite", "duree_minutes"],
+                    "anyOf": [
+                        _schema_etape([LIEU_TRAVAIL], [TRAVAIL], cerveau),
+                        _schema_etape(sorted(lieux), [ATTENTE, LOISIR], cerveau),
+                    ]
                 },
             }
         },
         "required": ["etapes"],
+    }
+
+
+def _schema_etape(
+    lieux: list[str], activites: list[str], cerveau: ConfigurationCerveau
+) -> dict:
+    return {
+        "type": "object",
+        "properties": {
+            "lieu": {"type": "string", "enum": lieux},
+            "activite": {"type": "string", "enum": activites},
+            "duree_minutes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": cerveau.duree_max_minutes,
+            },
+        },
+        "required": ["lieu", "activite", "duree_minutes"],
     }
 
 

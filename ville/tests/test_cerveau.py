@@ -51,7 +51,8 @@ def perception(**champs) -> Perception:
 
 def plan_selon_graine(demande) -> str:
     tirage = random.Random(demande.graine)
-    lieux = demande.schema["properties"]["etapes"]["items"]["properties"]["lieu"]["enum"]
+    variantes = demande.schema["properties"]["etapes"]["items"]["anyOf"]
+    lieux = variantes[1]["properties"]["lieu"]["enum"]
     lieu = tirage.choice([nom for nom in lieux if nom.startswith("loisir")])
     return json.dumps(
         {
@@ -483,8 +484,11 @@ def test_trop_d_etapes_refuse():
 
 def test_schema_limite_les_lieux():
     schema = schema_plan(LIEUX, ConfigurationCerveau())
-    proprietes = schema["properties"]["etapes"]["items"]["properties"]
-    assert proprietes["lieu"]["enum"] == ["domicile", "loisir_1", "travail"]
+    travail, autres = schema["properties"]["etapes"]["items"]["anyOf"]
+    assert travail["properties"]["lieu"]["enum"] == ["travail"]
+    assert travail["properties"]["activite"]["enum"] == ["travail"]
+    assert autres["properties"]["lieu"]["enum"] == ["domicile", "loisir_1", "travail"]
+    assert "travail" not in autres["properties"]["activite"]["enum"]
 
 
 def test_plan_va_au_lieu_puis_fait_l_activite():
@@ -517,10 +521,11 @@ def test_banc_avec_client_factice():
     cerveau = ConfigurationCerveau()
     valide = json.dumps({"etapes": [{"lieu": "domicile", "activite": "attente", "duree_minutes": 5}]})
     client = ClientFactice(lambda demande: valide)
-    assert banc.mesurer_sequentiel(client, cerveau, 4)["valides"] == 4
-    stabilite = banc.mesurer_stabilite(client, cerveau, 3)
-    assert stabilite["reponses_distinctes"] == 1
-    assert stabilite["autre_graine_differe"] is False
+    for contexte in banc.CONTEXTES:
+        assert banc.mesurer_sequentiel(client, cerveau, contexte, 4)["valides"] == 4
+    stabilite = banc.mesurer_stabilite(client, cerveau, "soir", 3)
+    assert stabilite["reponses_distinctes_meme_graine"] == 1
+    assert stabilite["reponses_distinctes_entre_graines"] == 1
     assert banc.mesurer_debit(client, cerveau, 2, 4)["appels"] == 4
 
 
@@ -586,5 +591,6 @@ def test_ollama_reel_repond_un_plan_valide():
     from ville.cerveau.client import ClientOllama
 
     cerveau = ConfigurationCerveau()
-    texte = ClientOllama().generer(banc.demande_exemple(cerveau, 1))
-    assert analyser_plan(texte, banc.LIEUX_EXEMPLE, cerveau)
+    for contexte in banc.CONTEXTES:
+        texte = ClientOllama().generer(banc.demande_exemple(cerveau, contexte, 1))
+        assert analyser_plan(texte, banc.LIEUX_EXEMPLE, cerveau)

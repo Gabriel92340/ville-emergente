@@ -2,7 +2,7 @@ from ville.cerveau.memoire import Memoire
 from ville.configuration import Configuration, ConfigurationCerveau
 from ville.moteur.agent import Perception
 
-VERSION_PROMPT = "1"
+VERSION_PROMPT = "2"
 
 
 def heure_lisible(seconde_du_jour: int) -> str:
