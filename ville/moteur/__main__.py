@@ -76,6 +76,22 @@ def afficher_mesures(cerveau: CerveauLLM, mesures: Mesures) -> None:
     print(f"attente de la simulation : {sum(mesures.attentes_s):.2f} s")
 
 
+def surveiller(execution: Execution) -> dict:
+    lectures, lecture_max_s, gel_max_s = 0, 0.0, 0.0
+    dernier_tick, debut_tick = None, time.perf_counter()
+    while execution.est_active():
+        debut = time.perf_counter()
+        tick = execution.instantane().tick
+        fin = time.perf_counter()
+        lectures += 1
+        lecture_max_s = max(lecture_max_s, fin - debut)
+        if tick != dernier_tick:
+            dernier_tick, debut_tick = tick, fin
+        gel_max_s = max(gel_max_s, fin - debut_tick)
+        time.sleep(0.1)
+    return {"lectures": lectures, "lecture_max_ms": lecture_max_s * 1000, "gel_max_s": gel_max_s}
+
+
 def executer(arguments) -> int:
     carte = Carte.charger(arguments.carte)
     configuration, cerveau_config, client = preparer_configurations(arguments, carte)
@@ -98,6 +114,7 @@ def executer(arguments) -> int:
             simulation = Simulation(configuration, carte, Journal(sortie), cerveau=cerveau)
             execution = Execution(simulation, nb_ticks)
             execution.demarrer()
+            fluidite = surveiller(execution) if cerveau is not None else None
             execution.attendre()
     finally:
         if cerveau is not None:
@@ -112,6 +129,11 @@ def executer(arguments) -> int:
     print(f"décisions : {simulation.nb_decisions}, distance parcourue : {distance_km:.1f} km")
     if cerveau is not None:
         afficher_mesures(cerveau, mesures)
+        print(
+            f"lecteur à 10 Hz : {fluidite['lectures']} lectures, "
+            f"lecture la plus lente {fluidite['lecture_max_ms']:.2f} ms, "
+            f"plus longue durée sans nouveau tick {fluidite['gel_max_s']:.2f} s"
+        )
     print(f"journal : {chemin_journal}")
     print(f"temps de calcul : {duree:.2f} s")
     return 0
