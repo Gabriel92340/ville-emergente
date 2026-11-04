@@ -17,7 +17,7 @@ dev = ["pytest>=8.0"]
 include = ["ville*"]
 
 [tool.setuptools.package-data]
-ville = ["cartes/*.json"]
+ville = ["cartes/*.json", "societe/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["ville/tests"]
