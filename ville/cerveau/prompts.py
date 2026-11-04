@@ -2,7 +2,7 @@ from ville.cerveau.memoire import Memoire
 from ville.configuration import Configuration, ConfigurationCerveau
 from ville.moteur.agent import Perception
 
-VERSION_PROMPT = "2"
+VERSION_PROMPT = "3"
 
 
 def heure_lisible(seconde_du_jour: int) -> str:
@@ -38,6 +38,8 @@ def construire_prompt(
         f"Le travail n'est possible qu'au lieu « travail » et rapporte "
         f"{euros(configuration.salaire_horaire_centimes)} de l'heure. "
         f"Un loisir coûte {euros(configuration.prix_loisir_centimes)}.\n"
+        f"Ton travail commence à {heure_lisible(perception.heure_travail_s)} "
+        f"et dure {configuration.duree_travail_s // 3600} heures.\n"
         f"Compteurs : {faits}.\n"
         f"Souvenirs récents :\n{souvenirs}\n"
         f"Écris ton plan pour les prochaines heures, en {cerveau.etapes_max} étapes au plus. "

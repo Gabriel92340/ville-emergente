@@ -431,6 +431,7 @@ def test_prompt_contient_le_contexte():
     assert "12,05 €" in texte
     assert "Tu es : travail" in texte
     assert "loisir_1" in texte
+    assert "Ton travail commence à 08h00 et dure 8 heures." in texte
 
 
 def test_formats_lisibles():
