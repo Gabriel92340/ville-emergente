@@ -1,5 +1,6 @@
 import json
 import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Callable, Protocol
@@ -25,10 +26,24 @@ class Client(Protocol):
     def generer(self, demande: DemandeModele) -> str: ...
 
 
+def _est_coupure_de_connexion(erreur: Exception) -> bool:
+    if isinstance(erreur, urllib.error.HTTPError):
+        return False
+    if isinstance(erreur, urllib.error.URLError):
+        return isinstance(erreur.reason, OSError) and not isinstance(erreur.reason, TimeoutError)
+    return isinstance(erreur, ConnectionError)
+
+
 class ClientOllama:
-    def __init__(self, url: str = "http://127.0.0.1:11434", delai_max_s: float = 120.0):
+    def __init__(
+        self,
+        url: str = "http://127.0.0.1:11434",
+        delai_max_s: float = 120.0,
+        pause_reessai_s: float = 2.0,
+    ):
         self._url = url.rstrip("/")
         self._delai_max_s = delai_max_s
+        self._pause_reessai_s = pause_reessai_s
 
     def generer(self, demande: DemandeModele) -> str:
         corps = json.dumps(
@@ -50,13 +65,24 @@ class ClientOllama:
             headers={"Content-Type": "application/json"},
         )
         try:
-            with urllib.request.urlopen(requete, timeout=self._delai_max_s) as reponse:
-                contenu = json.loads(reponse.read().decode("utf-8"))
+            contenu = self._envoyer(requete)
         except (OSError, ValueError) as erreur:
-            raise ErreurModele(f"appel au modèle impossible : {erreur}") from erreur
+            if not _est_coupure_de_connexion(erreur):
+                raise ErreurModele(f"appel au modèle impossible : {erreur}") from erreur
+            time.sleep(self._pause_reessai_s)
+            try:
+                contenu = self._envoyer(requete)
+            except (OSError, ValueError) as seconde_erreur:
+                raise ErreurModele(
+                    f"appel au modèle impossible : {seconde_erreur}"
+                ) from seconde_erreur
         if not isinstance(contenu, dict) or not isinstance(contenu.get("response"), str):
             raise ErreurModele("réponse d'Ollama sans champ « response »")
         return contenu["response"]
+
+    def _envoyer(self, requete: urllib.request.Request) -> object:
+        with urllib.request.urlopen(requete, timeout=self._delai_max_s) as reponse:
+            return json.loads(reponse.read().decode("utf-8"))
 
 
 class ClientFactice:

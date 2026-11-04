@@ -23,13 +23,25 @@ def demande(**champs) -> DemandeModele:
 
 @pytest.fixture
 def serveur():
-    etat = {"statut": 200, "corps": b'{"response":"texte"}', "recu": None, "chemin": None}
+    etat = {
+        "statut": 200,
+        "corps": b'{"response":"texte"}',
+        "recu": None,
+        "chemin": None,
+        "coupures": 0,
+        "requetes": 0,
+    }
 
     class Gestionnaire(BaseHTTPRequestHandler):
         def do_POST(self):
             longueur = int(self.headers["Content-Length"])
             etat["recu"] = json.loads(self.rfile.read(longueur).decode("utf-8"))
             etat["chemin"] = self.path
+            etat["requetes"] += 1
+            if etat["coupures"] > 0:
+                etat["coupures"] -= 1
+                self.close_connection = True
+                return
             self.send_response(etat["statut"])
             self.end_headers()
             self.wfile.write(etat["corps"])
@@ -78,7 +90,31 @@ def test_reponse_inexploitable_donne_une_erreur_modele(serveur, statut, corps):
 
 def test_serveur_absent_donne_une_erreur_modele():
     with pytest.raises(ErreurModele, match="appel au modèle impossible"):
-        ClientOllama("http://127.0.0.1:9", delai_max_s=2).generer(demande())
+        ClientOllama("http://127.0.0.1:9", delai_max_s=2, pause_reessai_s=0).generer(demande())
+
+
+def test_une_coupure_de_connexion_est_reessayee_une_fois(serveur):
+    etat, url = serveur
+    etat["coupures"] = 1
+    assert ClientOllama(url, pause_reessai_s=0).generer(demande()) == "texte"
+    assert etat["requetes"] == 2
+
+
+def test_deux_coupures_de_suite_donnent_une_erreur_modele(serveur):
+    etat, url = serveur
+    etat["coupures"] = 2
+    with pytest.raises(ErreurModele, match="appel au modèle impossible"):
+        ClientOllama(url, pause_reessai_s=0).generer(demande())
+    assert etat["requetes"] == 2
+
+
+@pytest.mark.parametrize("statut,corps", [(500, b"panne"), (200, b"pas du json")])
+def test_une_reponse_recue_n_est_pas_reessayee(serveur, statut, corps):
+    etat, url = serveur
+    etat["statut"], etat["corps"] = statut, corps
+    with pytest.raises(ErreurModele):
+        ClientOllama(url, pause_reessai_s=0).generer(demande())
+    assert etat["requetes"] == 1
 
 
 def test_client_factice_note_les_demandes():
