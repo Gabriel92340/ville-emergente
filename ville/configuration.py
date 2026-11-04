@@ -27,7 +27,7 @@ class ConfigurationCerveau:
     delai_ticks: int = 6
     taille_memoire: int = 12
     lieux_connus: int = 3
-    etapes_max: int = 6
+    etapes_max: int = 3
     duree_max_minutes: int = 720
     temperature: float = 0.7
     nb_jetons_max: int = 300

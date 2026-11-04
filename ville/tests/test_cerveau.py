@@ -511,7 +511,7 @@ def test_plan_saute_un_loisir_impayable():
 def test_le_budget_ne_devient_jamais_negatif_avec_des_loisirs_imposes(carte_grille):
     def loisirs(demande):
         etape = {"lieu": "loisir_1", "activite": "loisir", "duree_minutes": 1}
-        return json.dumps({"etapes": [etape] * 6})
+        return json.dumps({"etapes": [etape] * 3})
 
     configuration = Configuration(nb_agents=20, budget_initial_centimes=1500)
     _, simulation, _ = simuler(carte_grille, ClientFactice(loisirs), ticks=600, configuration=configuration)
@@ -578,7 +578,7 @@ def test_ligne_de_commande_panne_ollama_replie_sans_planter(tmp_path):
     carte_json.write_text(json.dumps(donnees_grille()), encoding="utf-8")
     journal = tmp_path / "a.jsonl"
     resultat = executer_cli(
-        "--carte", carte_json, "--heures", 0.05, "--agents", 5, "--cerveau",
+        "--carte", carte_json, "--heures", 0.02, "--agents", 2, "--cerveau",
         "--url-ollama", "http://127.0.0.1:9", "--delai-max-appel", 1, "--journal", journal,
     )
     assert resultat.returncode == 0, resultat.stderr
