@@ -28,6 +28,7 @@ class Simulation:
         journal,
         decideur: Decideur | None = None,
         cerveau: Cerveau | None = None,
+        societe=None,
     ):
         self.configuration = configuration
         self.carte = carte
@@ -35,7 +36,12 @@ class Simulation:
         self.alea = SourceAlea(configuration.graine)
         self.horloge = Horloge(configuration.duree_tick_s, configuration.heure_depart_s)
         self.agents = creer_population(configuration, carte, self.alea)
-        self.decideur = decideur or DecideurRegles(configuration, carte.noeuds)
+        self.societe = societe
+        self.noeuds_loisir = carte.noeuds
+        if societe is not None:
+            societe.demarrer(self)
+            self.noeuds_loisir = societe.noeuds_commerces
+        self.decideur = decideur or DecideurRegles(configuration, self.noeuds_loisir)
         self.cerveau = cerveau
         self.nb_decisions = 0
         entete = {
@@ -45,20 +51,41 @@ class Simulation:
             "empreinte_carte": carte.empreinte,
             "python": platform.python_version(),
         }
+        if societe is not None:
+            entete["societe"] = societe.description()
         if cerveau is not None:
             entete["cerveau"] = cerveau.description()
             cerveau.demarrer(self)
         self.journal.ecrire(entete)
 
     def avancer(self) -> None:
+        if self.societe is not None:
+            self.societe.tour(self.horloge.tick)
         if self.cerveau is not None:
             self.cerveau.tour(self.horloge.tick)
         intentions = self._decider()
         for agent, intention in intentions:
             self._appliquer(agent, intention)
-        for agent in self.agents:
+        for agent in self._ordre_de_progression():
             self._progresser(agent)
+        if self.societe is not None:
+            self.societe.apres_progression(self.horloge.tick)
         self.horloge.avancer()
+
+    def _ordre_de_progression(self) -> list[Agent]:
+        if self.societe is None:
+            return self.agents
+        ordre = list(self.agents)
+        flux = self.alea.flux("societe/ordre")
+        for position in range(len(ordre) - 1):
+            autre = position + int(flux.random() * (len(ordre) - position))
+            ordre[position], ordre[autre] = ordre[autre], ordre[position]
+        return ordre
+
+    def prix_loisir(self) -> int:
+        if self.societe is None:
+            return self.configuration.prix_loisir_centimes
+        return self.societe.economie.prix_moyen()
 
     def _decider(self) -> list[tuple[Agent, Intention]]:
         intentions = []
@@ -135,7 +162,10 @@ class Simulation:
             agent.terminer_activite()
 
     def _regler_activite(self, agent: Agent) -> None:
-        if agent.activite == TRAVAIL:
+        if self.societe is not None:
+            salaire = self.configuration.salaire_horaire_centimes * agent.duree_activite_s
+            self.societe.regler_activite(agent, salaire // 3600)
+        elif agent.activite == TRAVAIL:
             salaire = self.configuration.salaire_horaire_centimes * agent.duree_activite_s
             agent.budget_centimes += salaire // 3600
         elif agent.activite == LOISIR:
