@@ -1,6 +1,7 @@
 import argparse
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 
 from ville.cerveau.client import ClientOllama
@@ -10,13 +11,16 @@ from ville.cerveau.rejeu import (
     RejeuDivergent,
     configurations_du_journal,
     lire_entete,
+    societe_du_journal,
 )
-from ville.configuration import Configuration, ConfigurationCerveau
+from ville.configuration import Configuration, ConfigurationCerveau, ConfigurationSociete
 from ville.donnees.journal import Journal
 from ville.donnees.mesures import Mesures
 from ville.moteur.carte import Carte
 from ville.moteur.execution import Execution
 from ville.moteur.simulation import Simulation
+from ville.societe.scenarios import ScenarioInvalide, charger_scenario
+from ville.societe.societe import Societe
 
 CARTE_PAR_DEFAUT = Path(__file__).resolve().parent.parent / "cartes" / "lyon_presquile.json"
 
@@ -40,6 +44,8 @@ def analyser_arguments() -> argparse.Namespace:
     analyseur.add_argument("--delai-max-appel", type=float, default=120.0)
     analyseur.add_argument("--rejeu", type=Path)
     analyseur.add_argument("--mesures", type=Path)
+    analyseur.add_argument("--societe", action="store_true")
+    analyseur.add_argument("--scenario", type=Path)
     return analyseur.parse_args()
 
 
@@ -49,22 +55,33 @@ def preparer_configurations(arguments, carte: Carte):
         if entete["empreinte_carte"] != carte.empreinte:
             raise RejeuDivergent("la carte diffère de celle du journal")
         configuration, cerveau = configurations_du_journal(entete)
-        return configuration, cerveau, ClientRejeu(arguments.rejeu)
+        return configuration, cerveau, ClientRejeu(arguments.rejeu), societe_du_journal(entete)
     configuration = Configuration(
         graine=arguments.graine,
         nb_agents=arguments.agents,
         duree_tick_s=arguments.duree_tick,
         heure_depart_s=int(arguments.heure_depart * 3600),
     )
+    societe = None
+    if arguments.societe:
+        reglages = ConfigurationSociete()
+        scenario = charger_scenario(arguments.scenario) if arguments.scenario else []
+        societe = (reglages, scenario)
+        configuration = replace(
+            configuration,
+            salaire_horaire_centimes=reglages.salaire_horaire_centimes,
+            probabilite_loisir=reglages.probabilite_loisir,
+        )
     if not arguments.cerveau:
-        return configuration, None, None
+        return configuration, None, None, societe
     cerveau = ConfigurationCerveau(
         modele=arguments.modele,
         quota_agents=arguments.quota,
         periode_ticks=arguments.periode,
         delai_ticks=arguments.delai,
     )
-    return configuration, cerveau, ClientOllama(arguments.url_ollama, arguments.delai_max_appel)
+    client = ClientOllama(arguments.url_ollama, arguments.delai_max_appel)
+    return configuration, cerveau, client, societe
 
 
 def afficher_mesures(cerveau: CerveauLLM, mesures: Mesures) -> None:
@@ -74,6 +91,18 @@ def afficher_mesures(cerveau: CerveauLLM, mesures: Mesures) -> None:
         mediane = latences[len(latences) // 2]
         print(f"latence du modèle : médiane {mediane:.2f} s, maximum {latences[-1]:.2f} s")
     print(f"attente de la simulation : {sum(mesures.attentes_s):.2f} s")
+
+
+def afficher_societe(simulation: Simulation, societe: Societe) -> None:
+    economie = societe.economie
+    print(
+        f"monnaie : {economie.monnaie_totale(simulation.agents)} centimes, "
+        f"initiale {societe.monnaie_initiale}, injectée {economie.monnaie_injectee_centimes}"
+    )
+    print(
+        f"prix moyen : {economie.prix_moyen()} centimes, "
+        f"impôt : {economie.taux_impot_pourcent} %, rencontres : {societe.nb_rencontres}"
+    )
 
 
 def surveiller(execution: Execution) -> dict:
@@ -94,7 +123,7 @@ def surveiller(execution: Execution) -> dict:
 
 def executer(arguments) -> int:
     carte = Carte.charger(arguments.carte)
-    configuration, cerveau_config, client = preparer_configurations(arguments, carte)
+    configuration, cerveau_config, client, reglages = preparer_configurations(arguments, carte)
     graine = configuration.graine
     chemin_journal = arguments.journal or Path("sorties") / f"journal_graine_{graine}.jsonl"
     chemin_journal.parent.mkdir(parents=True, exist_ok=True)
@@ -107,11 +136,14 @@ def executer(arguments) -> int:
     cerveau = None
     if cerveau_config is not None:
         cerveau = CerveauLLM(cerveau_config, client, arguments.ouvriers, mesures)
+    societe = None if reglages is None else Societe(*reglages)
 
     debut = time.perf_counter()
     try:
         with open(chemin_journal, "w", encoding="utf-8", newline="\n") as sortie:
-            simulation = Simulation(configuration, carte, Journal(sortie), cerveau=cerveau)
+            simulation = Simulation(
+                configuration, carte, Journal(sortie), cerveau=cerveau, societe=societe
+            )
             execution = Execution(simulation, nb_ticks)
             execution.demarrer()
             fluidite = surveiller(execution) if cerveau is not None else None
@@ -127,6 +159,8 @@ def executer(arguments) -> int:
     print(f"carte : {len(carte.noeuds)} nœuds, empreinte {carte.empreinte[:12]}")
     print(f"agents : {configuration.nb_agents}, ticks : {nb_ticks}, graine : {graine}")
     print(f"décisions : {simulation.nb_decisions}, distance parcourue : {distance_km:.1f} km")
+    if societe is not None:
+        afficher_societe(simulation, societe)
     if cerveau is not None:
         afficher_mesures(cerveau, mesures)
         print(
@@ -152,6 +186,9 @@ def main() -> int:
     except RejeuDivergent as erreur:
         print(f"rejeu impossible : {erreur}", file=sys.stderr)
         return 3
+    except ScenarioInvalide as erreur:
+        print(f"scénario invalide : {erreur}", file=sys.stderr)
+        return 4
 
 
 if __name__ == "__main__":

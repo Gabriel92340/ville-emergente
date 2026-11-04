@@ -26,9 +26,11 @@ def construire_prompt(
     memoire: Memoire,
     configuration: Configuration,
     cerveau: ConfigurationCerveau,
+    contexte_societe: str | None = None,
 ) -> str:
     souvenirs = "\n".join(f"- {souvenir}" for souvenir in memoire.souvenirs) or "- aucun"
     faits = ", ".join(f"{fait} : {nombre}" for fait, nombre in memoire.faits) or "aucun"
+    societe = f"{contexte_societe}\n" if contexte_societe else ""
     return (
         f"Tu es l'habitant n°{perception.agent} d'une ville.\n"
         f"Il est {heure_lisible(perception.seconde_du_jour)}. "
@@ -40,6 +42,7 @@ def construire_prompt(
         f"Un loisir coûte {euros(configuration.prix_loisir_centimes)}.\n"
         f"Ton travail commence à {heure_lisible(perception.heure_travail_s)} "
         f"et dure {configuration.duree_travail_s // 3600} heures.\n"
+        f"{societe}"
         f"Compteurs : {faits}.\n"
         f"Souvenirs récents :\n{souvenirs}\n"
         f"Écris ton plan pour les prochaines heures, en {cerveau.etapes_max} étapes au plus. "

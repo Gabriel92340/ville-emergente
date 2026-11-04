@@ -49,6 +49,39 @@ def _schema_etape(
     }
 
 
+def ajouter_choix(schema: dict, attendus: dict[str, list[str] | None]) -> dict:
+    if not attendus:
+        return schema
+    proprietes = dict(schema["properties"])
+    for nom, valeurs in attendus.items():
+        if valeurs is None:
+            proprietes[nom] = {"type": "boolean"}
+        else:
+            proprietes[nom] = {"type": "string", "enum": valeurs}
+    return {
+        **schema,
+        "properties": proprietes,
+        "required": [*schema["required"], *attendus],
+    }
+
+
+def analyser_choix(texte: str, attendus: dict[str, list[str] | None]) -> dict:
+    if not attendus:
+        return {}
+    contenu = json.loads(texte)
+    choix = {}
+    for nom, valeurs in attendus.items():
+        if nom not in contenu:
+            raise ReponseInvalide(f"choix « {nom} » absent")
+        valeur = contenu[nom]
+        if valeurs is None and type(valeur) is not bool:
+            raise ReponseInvalide(f"choix « {nom} » invalide : {valeur!r}")
+        if valeurs is not None and valeur not in valeurs:
+            raise ReponseInvalide(f"choix « {nom} » invalide : {valeur!r}")
+        choix[nom] = valeur
+    return choix
+
+
 def analyser_plan(
     texte: str, lieux: dict[str, int], cerveau: ConfigurationCerveau
 ) -> list[EtapePlan]:

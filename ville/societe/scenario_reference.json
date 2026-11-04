@@ -1,0 +1,28 @@
+[
+  {
+    "tick": 60,
+    "type": "rumeur",
+    "contenu": "le pont de la Guillotière va fermer",
+    "source": 0
+  },
+  {
+    "tick": 300,
+    "type": "election",
+    "tick_vote": 1800,
+    "candidats": [
+      {
+        "agent": 0,
+        "taux_impot_pourcent": 10
+      },
+      {
+        "agent": 1,
+        "taux_impot_pourcent": 30
+      }
+    ]
+  },
+  {
+    "tick": 720,
+    "type": "pluie_argent",
+    "montant_centimes": 2000
+  }
+]

@@ -7,7 +7,13 @@ from ville.cerveau.memoire import Memoire
 from ville.cerveau.ordonnanceur import Ordonnanceur
 from ville.cerveau.plan import LIEU_DOMICILE, LIEU_TRAVAIL, PlanJour
 from ville.cerveau.prompts import VERSION_PROMPT, construire_prompt, heure_lisible
-from ville.cerveau.reponses import ReponseInvalide, analyser_plan, schema_plan
+from ville.cerveau.reponses import (
+    ReponseInvalide,
+    ajouter_choix,
+    analyser_choix,
+    analyser_plan,
+    schema_plan,
+)
 from ville.configuration import ConfigurationCerveau
 from ville.donnees.mesures import Mesures
 from ville.moteur.agent import DOMICILE, PREFIXE_ARRIVEE, Aller, Intention, Perception
@@ -23,6 +29,7 @@ class _Reflexion:
     futur: Future
     echeance: int
     flux: str
+    choix_attendus: dict
 
 
 class CerveauLLM:
@@ -59,7 +66,7 @@ class CerveauLLM:
         self._lieux = {agent.identifiant: self._tirer_lieux(agent) for agent in simulation.agents}
 
     def _tirer_lieux(self, agent) -> dict[str, int]:
-        noeuds = self._simulation.carte.noeuds
+        noeuds = self._simulation.noeuds_loisir
         flux = self._simulation.alea.flux(f"agents/{agent.identifiant}/lieux")
         lieux = {LIEU_DOMICILE: agent.domicile, LIEU_TRAVAIL: agent.travail}
         for rang in range(1, self.configuration.lieux_connus + 1):
@@ -84,6 +91,15 @@ class CerveauLLM:
         nom_flux = f"agents/{identifiant}/reflexion"
         graine = int(self._simulation.alea.flux(nom_flux).random() * 2**31)
         lieux = self._lieux[identifiant]
+        configuration = self._simulation.configuration
+        societe = self._simulation.societe
+        contexte, attendus = None, {}
+        if societe is not None:
+            contexte = societe.contexte_agent(identifiant)
+            attendus = societe.choix_attendus(identifiant)
+            configuration = replace(
+                configuration, prix_loisir_centimes=self._simulation.prix_loisir()
+            )
         demande = DemandeModele(
             agent=identifiant,
             tick=tick,
@@ -91,14 +107,15 @@ class CerveauLLM:
                 self._simulation.percevoir(self._simulation.agents[identifiant]),
                 lieux,
                 self._memoires[identifiant],
-                self._simulation.configuration,
+                configuration,
                 self.configuration,
+                contexte,
             ),
             graine=graine,
             modele=self.configuration.modele,
             temperature=self.configuration.temperature,
             nb_jetons_max=self.configuration.nb_jetons_max,
-            schema=schema_plan(lieux, self.configuration),
+            schema=ajouter_choix(schema_plan(lieux, self.configuration), attendus),
         )
         self.nb_reflexions += 1
         self._en_cours[identifiant] = _Reflexion(
@@ -106,6 +123,7 @@ class CerveauLLM:
             self._executeur.submit(self._appeler, demande),
             tick + self.configuration.delai_ticks,
             nom_flux,
+            attendus,
         )
 
     def _appeler(self, demande: DemandeModele) -> str:
@@ -128,12 +146,14 @@ class CerveauLLM:
 
     def _appliquer(self, identifiant: int, reflexion: _Reflexion, tick: int) -> None:
         debut = self._mesures.chrono()
-        texte, erreur, etapes = None, None, None
+        texte, erreur, etapes, choix = None, None, None, {}
         try:
             texte = reflexion.futur.result()
             etapes = analyser_plan(texte, self._lieux[identifiant], self.configuration)
+            choix = analyser_choix(texte, reflexion.choix_attendus)
         except (ErreurModele, ReponseInvalide) as exception:
             erreur = str(exception)
+            etapes = None
         self._mesures.noter_attente(identifiant, tick, self._mesures.chrono() - debut)
         if etapes is None:
             self._mesures.noter_repli()
@@ -142,33 +162,34 @@ class CerveauLLM:
         else:
             self._plans[identifiant] = PlanJour(etapes, self._lieux[identifiant])
             self._retour_routine.discard(identifiant)
+            if self._simulation.societe is not None:
+                self._simulation.societe.enregistrer_choix(identifiant, choix)
         demande = reflexion.demande
-        self._simulation.journal.ecrire(
-            {
-                "type": "reflexion",
-                "tick": tick,
-                "tick_demande": demande.tick,
-                "agent": identifiant,
-                "graine": self._simulation.configuration.graine,
-                "flux": reflexion.flux,
-                "graine_modele": demande.graine,
-                "modele": demande.modele,
-                "version_prompt": VERSION_PROMPT,
-                "contexte": demande.prompt,
-                "reponse_brute": texte,
-                "erreur": erreur,
-                "source": SOURCE_REGLES if etapes is None else SOURCE_LLM,
-                "plan": None if etapes is None else [asdict(etape) for etape in etapes],
-            }
-        )
+        evenement = {
+            "type": "reflexion",
+            "tick": tick,
+            "tick_demande": demande.tick,
+            "agent": identifiant,
+            "graine": self._simulation.configuration.graine,
+            "flux": reflexion.flux,
+            "graine_modele": demande.graine,
+            "modele": demande.modele,
+            "version_prompt": VERSION_PROMPT,
+            "contexte": demande.prompt,
+            "reponse_brute": texte,
+            "erreur": erreur,
+            "source": SOURCE_REGLES if etapes is None else SOURCE_LLM,
+            "plan": None if etapes is None else [asdict(etape) for etape in etapes],
+        }
+        if self._simulation.societe is not None:
+            evenement["choix"] = choix
+        self._simulation.journal.ecrire(evenement)
 
     def decider(self, perception: Perception, flux: Random) -> tuple[Intention, str]:
         identifiant = perception.agent
         plan = self._plans.get(identifiant)
         if plan is not None:
-            intention = plan.prochaine_intention(
-                perception, self._simulation.configuration.prix_loisir_centimes
-            )
+            intention = plan.prochaine_intention(perception, self._simulation.prix_loisir())
             if intention is not None:
                 return intention, SOURCE_LLM
             del self._plans[identifiant]

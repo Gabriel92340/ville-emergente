@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from ville.cerveau.client import DemandeModele, ErreurModele
-from ville.configuration import Configuration, ConfigurationCerveau
+from ville.configuration import Configuration, ConfigurationCerveau, ConfigurationSociete
 
 
 class RejeuDivergent(Exception):
@@ -20,6 +20,13 @@ def lire_entete(chemin: str | Path) -> dict:
 def configurations_du_journal(entete: dict) -> tuple[Configuration, ConfigurationCerveau]:
     parametres = {cle: valeur for cle, valeur in entete["cerveau"].items() if cle != "version_prompt"}
     return Configuration(**entete["configuration"]), ConfigurationCerveau(**parametres)
+
+
+def societe_du_journal(entete: dict) -> tuple[ConfigurationSociete, list[dict]] | None:
+    if "societe" not in entete:
+        return None
+    description = entete["societe"]
+    return ConfigurationSociete(**description["configuration"]), description["scenario"]
 
 
 class ClientRejeu:
