@@ -7,7 +7,7 @@ import ville
 
 RACINE = Path(ville.__file__).parent
 MODULES_INTERDITS = {"time", "datetime", "uuid", "secrets"}
-EXEMPTES_D_HORLOGE = {"__main__.py"}
+EXEMPTES_D_HORLOGE = {"__main__.py", "banc.py", "client.py", "mesures.py"}
 
 
 def fichiers_source():

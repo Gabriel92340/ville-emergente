@@ -53,10 +53,26 @@ ville/
 ## Commandes (à mettre à jour au fil du projet)
 
 - Installer : python -m venv .venv, puis pip install -e ".[dev]" dans l'environnement
-- Tests : pytest -q (ajouter -m reseau pour le test de téléchargement réel, qui demande aussi l'extra carte)
+- Tests : pytest -q (ajouter -m reseau pour le test de téléchargement réel, qui demande aussi l'extra carte ; -m ollama pour le test sur le vrai modèle, qui demande Ollama)
 - Lancer la simulation : python -m ville.moteur --graine 42 --heures 24
+- Lancer avec le cerveau : python -m ville.moteur --graine 42 --heure-depart 7 --heures 2 --cerveau --journal sorties/essai.jsonl --mesures sorties/essai_mesures.jsonl (partir au plus tard à 7 h, sinon des agents attendent le lendemain)
+- Rejouer un journal : python -m ville.moteur --heures 2 --rejeu sorties/essai.jsonl --journal sorties/rejeu.jsonl (même durée que l'original pour obtenir un journal identique)
+- Mesurer le modèle : python -m ville.cerveau.banc --essais 30
 - Figer une carte : pip install -e ".[carte]", puis python -m ville.moteur.preparer_carte --latitude 45.7610 --longitude 4.8330 --rayon 1000 --sortie ville/cartes/lyon_presquile.json
 - Lancer le serveur : uvicorn ville.api.serveur:app --reload (à créer en phase 4 ou 5)
+
+## Reproductibilité avec LLM
+
+- Le rejeu d'un journal est identique à l'octet : c'est la seule garantie stricte quand le modèle intervient.
+- Une exécution en direct est mesurée, pas garantie : le modèle peut répondre différemment à prompt et graine identiques.
+
+## Problèmes ouverts
+
+- Écarts entre exécutions en direct : de 6 % à 21 % des réponses selon les séries, cause non établie (le cache de prompts d'Ollama est une piste, pas une preuve).
+- Attentisme du modèle par défaut : environ 63 % des plans ne font qu'attendre. À comparer avec d'autres modèles en phase 4.
+- Coupures de connexion locale vers Ollama (WinError 10054 et 10013) observées une fois, cause inconnue.
+- Smart App Control bloque pandas et pyproj sur la machine de développement : OSMnx n'y tourne pas, et pandas est prévu en phase 4.
+- Le test de téléchargement réel (marqueur reseau) n'a jamais tourné sur cette machine.
 
 ## Instructions de compactage
 
