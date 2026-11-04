@@ -58,6 +58,7 @@ ville/
 - Lancer avec le cerveau : python -m ville.moteur --graine 42 --heure-depart 7 --heures 2 --cerveau --journal sorties/essai.jsonl --mesures sorties/essai_mesures.jsonl (partir au plus tard à 7 h, sinon des agents attendent le lendemain)
 - Rejouer un journal : python -m ville.moteur --heures 2 --rejeu sorties/essai.jsonl --journal sorties/rejeu.jsonl (même durée que l'original pour obtenir un journal identique)
 - Mesurer le modèle : python -m ville.cerveau.banc --essais 30
+- Lancer avec la société : ajouter --societe --scenario ville/societe/scenario_reference.json (le salaire et la probabilité de loisir viennent alors de ConfigurationSociete)
 - Figer une carte : pip install -e ".[carte]", puis python -m ville.moteur.preparer_carte --latitude 45.7610 --longitude 4.8330 --rayon 1000 --sortie ville/cartes/lyon_presquile.json
 - Lancer le serveur : uvicorn ville.api.serveur:app --reload (à créer en phase 4 ou 5)
 
@@ -73,6 +74,9 @@ ville/
 - Coupures de connexion locale vers Ollama (WinError 10054 et 10013) observées une fois, cause inconnue.
 - Smart App Control bloque pandas et pyproj sur la machine de développement : OSMnx n'y tourne pas, et pandas est prévu en phase 4.
 - Le test de téléchargement réel (marqueur reseau) n'a jamais tourné sur cette machine.
+- Économie instable à long terme avec les règles seules : sur 28 jours, les prix divergent entre commerces (2,53 € à 42,28 €) et 383 salaires sur 2 800 sont payés en partie. Cause probable, non vérifiée : les acheteurs ne comparent pas les prix.
+- Salaires, achats et prix n'ont pas été observés avec le modèle : le test final de 6 h s'arrête avant la fin des journées de travail.
+- Rumeur et élection restent à interpréter : 3 agents informés sur 100 (le modèle refuse de répéter dans 46 cas sur 54), et 76 voix contre 24 pour le candidat à 10 % d'impôt, qui était aussi cité en premier.
 
 ## Instructions de compactage
 
